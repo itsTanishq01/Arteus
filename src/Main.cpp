@@ -1,5 +1,3 @@
-// Dear ImGui: standalone example application for Win32 + OpenGL 3
-
 #include "imgui.h"
 #include "imgui_impl_opengl3.h"
 #include "imgui_impl_win32.h"
@@ -25,7 +23,6 @@ static int              g_Height;
 // Forward declarations of helper functions
 bool CreateDeviceWGL(HWND hWnd, WGL_WindowData* data);
 void CleanupDeviceWGL(HWND hWnd, WGL_WindowData* data);
-void ResetDeviceWGL();
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 // Function to load text from a file
@@ -48,7 +45,6 @@ bool SaveTextToFile(const char* filename, const std::string& text) {
 int main(int, char**)
 {
     // Create application window
-    //ImGui_ImplWin32_EnableDpiAwareness();
     WNDCLASSEXW wc = { sizeof(wc), CS_OWNDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, L"ImGui Example", nullptr };
     ::RegisterClassExW(&wc);
     HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"Arteus", WS_OVERLAPPEDWINDOW, 100, 100, 1280, 800, nullptr, nullptr, wc.hInstance, nullptr);
@@ -76,15 +72,12 @@ int main(int, char**)
 
     // Setup Dear ImGui style
     ImGui::StyleColorsDark();
-    //ImGui::StyleColorsClassic();
 
     // Setup Platform/Renderer backends
     ImGui_ImplWin32_InitForOpenGL(hwnd);
     ImGui_ImplOpenGL3_Init();
 
     // Our state
-    bool show_demo_window = true;
-    bool show_another_window = false;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
     std::vector<char> text(1024 * 16); // Buffer for text input
     char filename[256] = ""; // Buffer for filename input
@@ -94,7 +87,6 @@ int main(int, char**)
     while (!done)
     {
         // Poll and handle messages (inputs, window resize, etc.)
-        // See the WndProc() function below for our to dispatch events to the Win32 backend.
         MSG msg;
         while (::PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE))
         {
@@ -117,7 +109,7 @@ int main(int, char**)
         ImGui::NewFrame();
 
         // Create a text editor window
-        ImGui::Begin("Text Editor", nullptr, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_AlwaysVerticalScrollbar);
+        ImGui::Begin("Text Editor", nullptr, ImGuiWindowFlags_MenuBar);
         ImGui::SetWindowSize(ImVec2((float)g_Width, (float)g_Height), ImGuiCond_Always);
 
         // Menu bar
@@ -155,7 +147,7 @@ int main(int, char**)
             ImGui::EndMenuBar();
         }
 
-        // Text input area with scrollbars
+        // Text input area without scrollbars
         ImGui::InputTextMultiline("##text", text.data(), text.size(), ImVec2(-FLT_MIN, -FLT_MIN), ImGuiInputTextFlags_AllowTabInput);
         ImGui::End();
 
