@@ -99,6 +99,17 @@ void ShowFileMenu(bool& done) {
             }
             ImGui::EndMenu();
         }
+<<<<<<< HEAD
+=======
+
+        if (ImGui::BeginMenu("Text")) {
+            if (ImGui::MenuItem("Search & Replace")) {
+                // Implement search and replace dialog here
+            }
+            ImGui::EndMenu();
+        }
+
+>>>>>>> 4c9d8f9a5ad35f31829ee7f7409a86e043672e66
         ImGui::EndMenuBar();
     }
 }
