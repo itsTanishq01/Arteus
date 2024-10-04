@@ -1,4 +1,4 @@
-# ImGui Text Editor Example
+# Arteus Text Editor
 
 This is a standalone example application using Dear ImGui for creating a simple text editor with OpenGL 3 and Win32. The application allows users to create, open, and save text files using a graphical user interface.
 
