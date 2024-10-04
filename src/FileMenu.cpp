@@ -64,7 +64,17 @@ void ShowFileMenu(bool& done) {
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("New")) {
-                tabs.push_back(Tab{ "Untitled", "" });
+                std::string newTitle = "Untitled";
+                int count = 1;
+
+                while (std::any_of(tabs.begin(), tabs.end(), [&newTitle](const Tab& tab) {
+                    return tab.title == newTitle;
+                })) {
+                    newTitle = "Untitled (" + std::to_string(count) + ")";
+                    count++;
+                }
+
+                tabs.push_back(Tab{ newTitle, "", L"" }); // Initialize with empty filename
                 currentTabIndex = static_cast<int>(tabs.size()) - 1; // Switch to the new tab
             }
             if (ImGui::MenuItem("Open")) {
@@ -72,24 +82,45 @@ void ShowFileMenu(bool& done) {
                 if (OpenFileDialog(filename, sizeof(filename))) {
                     std::string file_text;
                     if (LoadTextFromFile(filename, file_text)) {
-                        // Convert to std::string
                         std::wstring wFileName = filename;
                         std::string fullPath(wFileName.begin(), wFileName.end());
                         std::string fileName = fullPath.substr(fullPath.find_last_of("/\\") + 1);
 
-                        // Add new tab and set it as current
-                        tabs.push_back(Tab{ fileName, file_text });
-                        currentTabIndex = static_cast<int>(tabs.size()) - 1; // Switch to the new tab
-                    }
-                    else {
+                        auto it = std::find_if(tabs.begin(), tabs.end(), [&fileName](const Tab& tab) {
+                            return tab.title == fileName;
+                        });
+
+                        if (it != tabs.end()) {
+                            currentTabIndex = std::distance(tabs.begin(), it);
+                        } else {
+                            // Ensure fullPath is converted to std::wstring
+                            std::wstring wFullPath = std::wstring(fullPath.begin(), fullPath.end());
+                            tabs.push_back(Tab{ fileName, file_text, wFullPath }); // Store full path
+                            currentTabIndex = static_cast<int>(tabs.size()) - 1; // Switch to the new tab
+                        }
+                    } else {
                         ImGui::Text("Error loading file!");
                     }
                 }
             }
             if (ImGui::MenuItem("Save")) {
                 if (currentTabIndex >= 0 && currentTabIndex < static_cast<int>(tabs.size())) {
+                    if (!tabs[currentTabIndex].filename.empty()) {
+                        SaveTextToFile(tabs[currentTabIndex].filename.c_str(), tabs[currentTabIndex].content);
+                    } else {
+                        wchar_t filename[256] = L"";
+                        if (SaveFileDialog(filename, sizeof(filename))) {
+                            tabs[currentTabIndex].filename = filename; // Save filename for future use
+                            SaveTextToFile(filename, tabs[currentTabIndex].content);
+                        }
+                    }
+                }
+            }
+            if (ImGui::MenuItem("Save As")) {
+                if (currentTabIndex >= 0 && currentTabIndex < static_cast<int>(tabs.size())) {
                     wchar_t filename[256] = L"";
                     if (SaveFileDialog(filename, sizeof(filename))) {
+                        tabs[currentTabIndex].filename = filename; // Save filename for future use
                         SaveTextToFile(filename, tabs[currentTabIndex].content);
                     }
                 }
@@ -99,17 +130,6 @@ void ShowFileMenu(bool& done) {
             }
             ImGui::EndMenu();
         }
-<<<<<<< HEAD
-=======
-
-        if (ImGui::BeginMenu("Text")) {
-            if (ImGui::MenuItem("Search & Replace")) {
-                // Implement search and replace dialog here
-            }
-            ImGui::EndMenu();
-        }
-
->>>>>>> 4c9d8f9a5ad35f31829ee7f7409a86e043672e66
         ImGui::EndMenuBar();
     }
 }
@@ -140,18 +160,16 @@ void RenderTabs() {
             if (!isOpen) {
                 tabs.erase(tabs.begin() + i);
 
-                if (i == currentTabIndex) {
-                    // If there are no tabs left, set index to -1
-                    if (tabs.empty()) {
-                        currentTabIndex = -1;
-                    }
-                    else {
-                        // Select the previous tab if available
-                        currentTabIndex = (i > 0) ? i - 1 : 0; // Go to the previous tab or the first tab
-                    }
+                if (tabs.empty()) {
+                    currentTabIndex = -1;
                 }
-                else if (i < currentTabIndex) {
-                    currentTabIndex--;
+                else {
+                    if (i == currentTabIndex) {
+                        currentTabIndex = (i > 0) ? i - 1 : 0; // Go to previous tab or first tab
+                    }
+                    else if (i < currentTabIndex) {
+                        currentTabIndex--;
+                    }
                 }
 
                 i--; // Adjust index after erasing

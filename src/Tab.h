@@ -8,8 +8,9 @@ struct Tab {
     std::string content;
     std::wstring filename; // Filename as std::wstring
 
-    Tab(const std::string& title, const std::string& content)
-        : title(title), content(content) {}
+    // Updated constructor to accept title, content, and filename
+    Tab(const std::string& title, const std::string& content, const std::wstring& filename = L"")
+        : title(title), content(content), filename(filename) {}
 };
 
 #endif // TAB_H
