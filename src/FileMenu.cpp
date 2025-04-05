@@ -6,9 +6,12 @@
 #include <vector>
 #include <commdlg.h>
 #include <algorithm>
+#include <shlobj.h> // For SHBrowseForFolder
 
 std::vector<Tab> tabs; // Collection of tabs
 int currentTabIndex = -1; // Index of the currently active tab
+
+
 
 bool LoadTextFromFile(const wchar_t* filename, std::string& text) {
     std::ifstream file(filename);
@@ -60,6 +63,24 @@ bool SaveFileDialog(wchar_t* filename, DWORD maxFileNameLength) {
     return GetSaveFileNameW(&ofn);
 }
 
+static bool OpenFolderDialog(wchar_t* foldername, DWORD maxFolderNameLength) {
+    BROWSEINFOW bi = { 0 };
+    bi.lpszTitle = L"Select Folder";
+    LPITEMIDLIST pidl = SHBrowseForFolderW(&bi);
+    if (pidl != 0) {
+        // Get the name of the folder
+        SHGetPathFromIDListW(pidl, foldername);
+        // Free memory used
+        IMalloc* imalloc = 0;
+        if (SUCCEEDED(SHGetMalloc(&imalloc))) {
+            imalloc->Free(pidl);
+            imalloc->Release();
+        }
+        return true;
+    }
+    return false;
+}
+
 void ShowFileMenu(bool& done) {
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu("File")) {
@@ -69,7 +90,7 @@ void ShowFileMenu(bool& done) {
 
                 while (std::any_of(tabs.begin(), tabs.end(), [&newTitle](const Tab& tab) {
                     return tab.title == newTitle;
-                })) {
+                    })) {
                     newTitle = "Untitled (" + std::to_string(count) + ")";
                     count++;
                 }
@@ -79,7 +100,7 @@ void ShowFileMenu(bool& done) {
             }
             if (ImGui::MenuItem("Open")) {
                 wchar_t filename[256] = L"";
-                if (OpenFileDialog(filename, sizeof(filename))) {
+                if (OpenFileDialog(filename, sizeof(filename) / sizeof(wchar_t))) {
                     std::string file_text;
                     if (LoadTextFromFile(filename, file_text)) {
                         std::wstring wFileName = filename;
@@ -88,18 +109,51 @@ void ShowFileMenu(bool& done) {
 
                         auto it = std::find_if(tabs.begin(), tabs.end(), [&fileName](const Tab& tab) {
                             return tab.title == fileName;
-                        });
+                            });
 
                         if (it != tabs.end()) {
                             currentTabIndex = std::distance(tabs.begin(), it);
-                        } else {
+                        }
+                        else {
                             // Ensure fullPath is converted to std::wstring
                             std::wstring wFullPath = std::wstring(fullPath.begin(), fullPath.end());
                             tabs.push_back(Tab{ fileName, file_text, wFullPath }); // Store full path
                             currentTabIndex = static_cast<int>(tabs.size()) - 1; // Switch to the new tab
                         }
-                    } else {
+                    }
+                    else {
                         ImGui::Text("Error loading file!");
+                    }
+                }
+            }
+            if (ImGui::MenuItem("Open Folder")) {
+                wchar_t foldername[256] = L"";
+                if (OpenFolderDialog(foldername, sizeof(foldername) / sizeof(wchar_t))) {
+                    // Handle folder loading logic here
+                    // For example, you can list all files in the folder and open them as tabs
+                    WIN32_FIND_DATAW findFileData;
+                    HANDLE hFind = FindFirstFileW((std::wstring(foldername) + L"\\*").c_str(), &findFileData);
+
+                    if (hFind != INVALID_HANDLE_VALUE) {
+                        do {
+                            if (!(findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+                                std::wstring filePath = std::wstring(foldername) + L"\\" + findFileData.cFileName;
+                                std::string file_text;
+                                if (LoadTextFromFile(filePath.c_str(), file_text)) {
+                                    std::wstring wFileName = findFileData.cFileName;
+                                    std::string fileName(wFileName.begin(), wFileName.end());
+
+                                    auto it = std::find_if(tabs.begin(), tabs.end(), [&fileName](const Tab& tab) {
+                                        return tab.title == fileName;
+                                        });
+
+                                    if (it == tabs.end()) {
+                                        tabs.push_back(Tab{ fileName, file_text, filePath }); // Store full path
+                                    }
+                                }
+                            }
+                        } while (FindNextFileW(hFind, &findFileData) != 0);
+                        FindClose(hFind);
                     }
                 }
             }
@@ -107,9 +161,10 @@ void ShowFileMenu(bool& done) {
                 if (currentTabIndex >= 0 && currentTabIndex < static_cast<int>(tabs.size())) {
                     if (!tabs[currentTabIndex].filename.empty()) {
                         SaveTextToFile(tabs[currentTabIndex].filename.c_str(), tabs[currentTabIndex].content);
-                    } else {
+                    }
+                    else {
                         wchar_t filename[256] = L"";
-                        if (SaveFileDialog(filename, sizeof(filename))) {
+                        if (SaveFileDialog(filename, sizeof(filename) / sizeof(wchar_t))) {
                             tabs[currentTabIndex].filename = filename; // Save filename for future use
                             SaveTextToFile(filename, tabs[currentTabIndex].content);
                         }
@@ -119,7 +174,7 @@ void ShowFileMenu(bool& done) {
             if (ImGui::MenuItem("Save As")) {
                 if (currentTabIndex >= 0 && currentTabIndex < static_cast<int>(tabs.size())) {
                     wchar_t filename[256] = L"";
-                    if (SaveFileDialog(filename, sizeof(filename))) {
+                    if (SaveFileDialog(filename, sizeof(filename) / sizeof(wchar_t))) {
                         tabs[currentTabIndex].filename = filename; // Save filename for future use
                         SaveTextToFile(filename, tabs[currentTabIndex].content);
                     }

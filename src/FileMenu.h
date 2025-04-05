@@ -13,6 +13,6 @@ bool SaveTextToFile(const wchar_t* filename, const std::string& text);
 bool OpenFileDialog(wchar_t* filename, DWORD maxFileNameLength);
 bool SaveFileDialog(wchar_t* filename, DWORD maxFileNameLength);
 void ShowFileMenu(bool& done);
-void RenderTabs();
+void RenderTabs(); // New function to render tabs
 
 #endif // FILEMENU_H

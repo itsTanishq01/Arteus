@@ -5,8 +5,9 @@
 #include <GL/GL.h>
 #include <tchar.h>
 #include "FileMenu.h"
-#include "TextMenu.h" // Include the new header for text features
+#include "TextMenu.h"
 #include <algorithm>
+
 
 // Data stored per platform window
 struct WGL_WindowData { HDC hDC; };
@@ -21,6 +22,13 @@ static int g_Height;
 bool searchReplaceOpen = false;
 std::string searchText;
 std::string replaceText;
+std::vector<SearchResult> searchResults;
+bool caseSensitive = false;
+size_t currentMatchIndex = 0;
+
+// Variables for file browser
+bool fileBrowserOpen = false;
+std::string selectedFilePath;
 
 // Forward declarations of helper functions
 bool CreateDeviceWGL(HWND hWnd, WGL_WindowData* data);
@@ -104,29 +112,39 @@ int main(int, char**) {
                 }
                 ImGui::EndMenu();
             }
+            if (ImGui::BeginMenu("File")) {
+                if (ImGui::MenuItem("Open File Browser")) {
+                    fileBrowserOpen = true; // Open the file browser
+                }
+                ImGui::EndMenu();
+            }
             ImGui::EndMenuBar();
         }
 
         // Render tabs
         RenderTabs();
 
+        // Show the search and replace dialog and render highlighted text
+        if (currentTabIndex >= 0 && currentTabIndex < tabs.size()) {
+            ShowSearchReplaceDialog(&searchReplaceOpen, searchText, replaceText, tabs[currentTabIndex].content,
+                searchResults, caseSensitive, currentMatchIndex);
+
+            ImGui::BeginChild("TextContent", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), false, ImGuiWindowFlags_HorizontalScrollbar);
+            ImGui::EndChild();
+        }
+
         // Status bar for current tab
         if (currentTabIndex >= 0 && currentTabIndex < tabs.size()) {
             size_t totalCharacters = std::count_if(tabs[currentTabIndex].content.begin(), tabs[currentTabIndex].content.end(), [](char c) { return !std::isspace(c); });
             size_t totalLines = std::count(tabs[currentTabIndex].content.begin(), tabs[currentTabIndex].content.end(), '\n') + 1;
             ImGui::Separator();
-            ImGui::Text("Total Characters: %zu | Total Lines: %zu", totalCharacters, totalLines);
+            ImGui::Text("Total Characters: %zu | Total Lines: %zu |", totalCharacters, totalLines);
         }
         else {
             ImGui::Separator();
             ImGui::Text("No tabs open");
         }
         ImGui::End();
-
-        // Show the search and replace dialog
-        if (currentTabIndex >= 0 && currentTabIndex < tabs.size()) {
-            ShowSearchReplaceDialog(&searchReplaceOpen, searchText, replaceText, tabs[currentTabIndex].content);
-        }
 
         // Rendering
         ImGui::Render();
@@ -139,17 +157,18 @@ int main(int, char**) {
         ::SwapBuffers(g_MainWindow.hDC);
     }
 
+    // Cleanup
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
 
     CleanupDeviceWGL(hwnd, &g_MainWindow);
-    wglDeleteContext(g_hRC);
     ::DestroyWindow(hwnd);
     ::UnregisterClassW(wc.lpszClassName, wc.hInstance);
 
     return 0;
 }
+
 
 // Helper functions
 bool CreateDeviceWGL(HWND hWnd, WGL_WindowData* data) {

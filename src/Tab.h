@@ -11,6 +11,7 @@ struct Tab {
     // Updated constructor to accept title, content, and filename
     Tab(const std::string& title, const std::string& content, const std::wstring& filename = L"")
         : title(title), content(content), filename(filename) {}
+
 };
 
 #endif // TAB_H

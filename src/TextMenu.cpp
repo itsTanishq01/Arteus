@@ -3,72 +3,85 @@
 #include <algorithm>
 #include <vector>
 #include <string>
-#define _CRT_SECURE_NO_WARNINGS
+#include <cctype>
+
+// Case-insensitive search function
+size_t ci_find(const std::string& str, const std::string& substr, size_t pos = 0) {
+    auto it = std::search(
+        str.begin() + pos, str.end(),
+        substr.begin(), substr.end(),
+        [](char ch1, char ch2) { return std::toupper(ch1) == std::toupper(ch2); }
+    );
+    return it == str.end() ? std::string::npos : std::distance(str.begin(), it);
+}
+
+// Function to find all occurrences of a substring
+void findAllOccurrences(const std::string& text, const std::string& searchText, std::vector<SearchResult>& results, bool caseSensitive) {
+    results.clear();
+    size_t pos = 0;
+    while (true) {
+        size_t found = caseSensitive ? text.find(searchText, pos) : ci_find(text, searchText, pos);
+        if (found == std::string::npos) break;
+        results.push_back({ found, found + searchText.length() });
+        pos = found + 1;
+    }
+}
 
 // Show search and replace dialog
-void ShowSearchReplaceDialog(bool* open, std::string& searchText, std::string& replaceText, std::string& text) {
+void ShowSearchReplaceDialog(bool* open, std::string& searchText, std::string& replaceText, std::string& text,
+    std::vector<SearchResult>& searchResults, bool& caseSensitive, size_t& currentMatchIndex) {  // Changed int to size_t
     if (!*open) return;
 
     ImGui::OpenPopup("Search and Replace");
 
     if (ImGui::BeginPopupModal("Search and Replace", open)) {
-        // Create buffers for search and replace text
         static char searchBuffer[256] = "";
         static char replaceBuffer[256] = "";
 
-        // Copy std::string content to buffers
-        strncpy_s(searchBuffer, sizeof(searchBuffer), searchText.c_str(), _TRUNCATE);
-        strncpy_s(replaceBuffer, sizeof(replaceBuffer), replaceText.c_str(), _TRUNCATE);
+        // Use strncpy_s instead of strncpy
+        strncpy_s(searchBuffer, searchText.c_str(), sizeof(searchBuffer) - 1);
+        strncpy_s(replaceBuffer, replaceText.c_str(), sizeof(replaceBuffer) - 1);
 
-        // Input for search text
-        if (ImGui::InputText("Search", searchBuffer, sizeof(searchBuffer))) {
-            searchText = searchBuffer; // Update std::string with buffer content
+        bool searchModified = ImGui::InputText("Search", searchBuffer, sizeof(searchBuffer));
+        if (searchModified) {
+            searchText = searchBuffer;
+            findAllOccurrences(text, searchText, searchResults, caseSensitive);
+            currentMatchIndex = 0;
         }
 
-        // Input for replace text
         if (ImGui::InputText("Replace", replaceBuffer, sizeof(replaceBuffer))) {
-            replaceText = replaceBuffer; // Update std::string with buffer content
+            replaceText = replaceBuffer;
         }
 
-        ImGui::Spacing(); // Add some space between input fields and buttons
+        if (ImGui::Checkbox("Case Sensitive", &caseSensitive)) {
+            findAllOccurrences(text, searchText, searchResults, caseSensitive);
+            currentMatchIndex = 0;
+        }
 
-        // Buttons for replacing
+        ImGui::Text("Found %d matches", static_cast<int>(searchResults.size()));
+
+        ImGui::Spacing();
+
         if (ImGui::Button("Replace##replace")) {
-            if (!searchText.empty()) {
-                size_t pos = text.find(searchText);
-                if (pos != std::string::npos) {
-                    text.replace(pos, searchText.length(), replaceText);
-                    ImGui::Text("Replaced first occurrence."); // Feedback for single replacement
+            if (!searchResults.empty()) {
+                size_t pos = searchResults[currentMatchIndex].start;
+                text.replace(pos, searchText.length(), replaceText);
+                findAllOccurrences(text, searchText, searchResults, caseSensitive);
+                if (currentMatchIndex >= searchResults.size()) {
+                    currentMatchIndex = searchResults.size() - 1;
                 }
-                else {
-                    ImGui::Text("Search term not found."); // Clear feedback when nothing is found
-                }
-            }
-            else {
-                ImGui::Text("Please enter a search term.");
             }
         }
-
-        ImGui::SameLine(); // Align buttons side by side
-        if (ImGui::Button("Replace All##replace_all")) {
-            if (!searchText.empty()) {
-                size_t pos = 0;
-                bool found = false; // Flag to check if any replacements were made
-                while ((pos = text.find(searchText, pos)) != std::string::npos) {
-                    text.replace(pos, searchText.length(), replaceText);
-                    pos += replaceText.length(); // Move past the replaced text
-                    found = true; // Mark that a replacement was made
-                }
-                if (found) {
-                    ImGui::Text("All occurrences replaced."); // Feedback for multiple replacements
-                }
-                else {
-                    ImGui::Text("No occurrences found."); // Clear feedback when nothing is found
-                }
+        ImGui::SameLine();
+        if (ImGui::Button("Replace All")) {
+            size_t replacements = 0;
+            for (auto it = searchResults.rbegin(); it != searchResults.rend(); ++it) {
+                text.replace(it->start, searchText.length(), replaceText);
+                replacements++;
             }
-            else {
-                ImGui::Text("Please enter a search term.");
-            }
+            findAllOccurrences(text, searchText, searchResults, caseSensitive);
+            currentMatchIndex = 0;
+            ImGui::Text("%zu occurrences replaced.", replacements);
         }
 
         ImGui::EndPopup();
