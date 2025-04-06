@@ -2,12 +2,12 @@
 #include "imgui_impl_opengl3.h"
 #include "imgui_impl_win32.h"
 #include <windows.h>
-#include <GL/GL.h>
-#include <tchar.h>
+#include <gl/gl.h>
+#include <string>
 #include "FileMenu.h"
 #include "TextMenu.h"
+#include "FileHierarchy.h"
 #include <algorithm>
-
 
 // Data stored per platform window
 struct WGL_WindowData { HDC hDC; };
@@ -49,6 +49,7 @@ int main(int, char**) {
         ::UnregisterClassW(wc.lpszClassName, wc.hInstance);
         return 1;
     }
+
     wglMakeCurrent(g_MainWindow.hDC, g_hRC);
 
     // Show the window
@@ -84,8 +85,10 @@ int main(int, char**) {
             if (msg.message == WM_QUIT)
                 done = true;
         }
+
         if (done)
             break;
+
         if (::IsIconic(hwnd)) {
             ::Sleep(10);
             continue;
@@ -96,10 +99,15 @@ int main(int, char**) {
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
 
+        // Create the explorer window on the left
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(ImVec2(250, (float)g_Height));
+        ShowHierarchyWindow();
+
         // Create a text editor window
+        ImGui::SetNextWindowPos(ImVec2(250, 0));
+        ImGui::SetNextWindowSize(ImVec2((float)g_Width - 250, (float)g_Height));
         ImGui::Begin("Text Editor", nullptr, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
-        ImGui::SetWindowPos(ImVec2(0, 0), ImGuiCond_Always);
-        ImGui::SetWindowSize(ImVec2((float)g_Width, (float)g_Height), ImGuiCond_Always);
 
         // Show the main menu
         ShowFileMenu(done);
@@ -112,12 +120,14 @@ int main(int, char**) {
                 }
                 ImGui::EndMenu();
             }
+
             if (ImGui::BeginMenu("File")) {
                 if (ImGui::MenuItem("Open File Browser")) {
                     fileBrowserOpen = true; // Open the file browser
                 }
                 ImGui::EndMenu();
             }
+
             ImGui::EndMenuBar();
         }
 
@@ -128,7 +138,6 @@ int main(int, char**) {
         if (currentTabIndex >= 0 && currentTabIndex < tabs.size()) {
             ShowSearchReplaceDialog(&searchReplaceOpen, searchText, replaceText, tabs[currentTabIndex].content,
                 searchResults, caseSensitive, currentMatchIndex);
-
             ImGui::BeginChild("TextContent", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), false, ImGuiWindowFlags_HorizontalScrollbar);
             ImGui::EndChild();
         }
@@ -144,6 +153,7 @@ int main(int, char**) {
             ImGui::Separator();
             ImGui::Text("No tabs open");
         }
+
         ImGui::End();
 
         // Rendering
@@ -161,14 +171,11 @@ int main(int, char**) {
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
-
     CleanupDeviceWGL(hwnd, &g_MainWindow);
     ::DestroyWindow(hwnd);
     ::UnregisterClassW(wc.lpszClassName, wc.hInstance);
-
     return 0;
 }
-
 
 // Helper functions
 bool CreateDeviceWGL(HWND hWnd, WGL_WindowData* data) {
