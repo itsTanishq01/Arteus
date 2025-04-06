@@ -7,6 +7,7 @@
 #include <commdlg.h>
 #include <algorithm>
 #include <shlobj.h> // For SHBrowseForFolder
+#include "FileHierarchy.h" // Added include for SetWorkingDirectory function
 
 std::vector<Tab> tabs; // Collection of tabs
 int currentTabIndex = -1; // Index of the currently active tab
@@ -129,32 +130,9 @@ void ShowFileMenu(bool& done) {
             if (ImGui::MenuItem("Open Folder")) {
                 wchar_t foldername[256] = L"";
                 if (OpenFolderDialog(foldername, sizeof(foldername) / sizeof(wchar_t))) {
-                    // Handle folder loading logic here
-                    // For example, you can list all files in the folder and open them as tabs
-                    WIN32_FIND_DATAW findFileData;
-                    HANDLE hFind = FindFirstFileW((std::wstring(foldername) + L"\\*").c_str(), &findFileData);
-
-                    if (hFind != INVALID_HANDLE_VALUE) {
-                        do {
-                            if (!(findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
-                                std::wstring filePath = std::wstring(foldername) + L"\\" + findFileData.cFileName;
-                                std::string file_text;
-                                if (LoadTextFromFile(filePath.c_str(), file_text)) {
-                                    std::wstring wFileName = findFileData.cFileName;
-                                    std::string fileName(wFileName.begin(), wFileName.end());
-
-                                    auto it = std::find_if(tabs.begin(), tabs.end(), [&fileName](const Tab& tab) {
-                                        return tab.title == fileName;
-                                        });
-
-                                    if (it == tabs.end()) {
-                                        tabs.push_back(Tab{ fileName, file_text, filePath }); // Store full path
-                                    }
-                                }
-                            }
-                        } while (FindNextFileW(hFind, &findFileData) != 0);
-                        FindClose(hFind);
-                    }
+                    // Modified: Instead of opening all files in the folder as tabs,
+                    // set the folder as the current working directory in the file hierarchy
+                    SetWorkingDirectory(std::wstring(foldername));
                 }
             }
             if (ImGui::MenuItem("Save")) {
