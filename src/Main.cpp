@@ -7,18 +7,16 @@
 #include "FileMenu.h"
 #include "TextMenu.h"
 #include "FileHierarchy.h"
+#include "Terminal.h"
 #include <algorithm>
 
-// Data stored per platform window
 struct WGL_WindowData { HDC hDC; };
 
-// Data
 static HGLRC g_hRC;
 static WGL_WindowData g_MainWindow;
-static int g_Width;
-static int g_Height;
+int g_Width;  
+int g_Height; 
 
-// Variables for search and replace dialog
 bool searchReplaceOpen = false;
 std::string searchText;
 std::string replaceText;
@@ -26,23 +24,18 @@ std::vector<SearchResult> searchResults;
 bool caseSensitive = false;
 size_t currentMatchIndex = 0;
 
-// Variables for file browser
 bool fileBrowserOpen = false;
 std::string selectedFilePath;
 
-// Forward declarations of helper functions
 bool CreateDeviceWGL(HWND hWnd, WGL_WindowData* data);
 void CleanupDeviceWGL(HWND hWnd, WGL_WindowData* data);
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
-// Main code
 int main(int, char**) {
-    // Create application window
     WNDCLASSEXW wc = { sizeof(wc), CS_OWNDC, WndProc, 0L, 0L, GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr, L"ImGui Example", nullptr };
     ::RegisterClassExW(&wc);
     HWND hwnd = ::CreateWindowW(wc.lpszClassName, L"Arteus", WS_OVERLAPPEDWINDOW, 100, 100, 1280, 800, nullptr, nullptr, wc.hInstance, nullptr);
 
-    // Initialize OpenGL
     if (!CreateDeviceWGL(hwnd, &g_MainWindow)) {
         CleanupDeviceWGL(hwnd, &g_MainWindow);
         ::DestroyWindow(hwnd);
@@ -52,32 +45,27 @@ int main(int, char**) {
 
     wglMakeCurrent(g_MainWindow.hDC, g_hRC);
 
-    // Show the window
     ::ShowWindow(hwnd, SW_SHOWDEFAULT);
     ::UpdateWindow(hwnd);
 
-    // Setup Dear ImGui context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
 
-    // Setup Dear ImGui style
     ImGui::StyleColorsDark();
 
-    // Setup Platform/Renderer backends
     ImGui_ImplWin32_InitForOpenGL(hwnd);
     ImGui_ImplOpenGL3_Init();
 
-    // Initialize the first tab
     tabs.push_back(Tab{ "Untitled", "" });
     currentTabIndex = 0;
 
-    // Main loop
+    g_Terminal.Initialize();
+
     bool done = false;
     while (!done) {
-        // Poll and handle messages
         MSG msg;
         while (::PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE)) {
             ::TranslateMessage(&msg);
@@ -94,36 +82,45 @@ int main(int, char**) {
             continue;
         }
 
-        // Start the Dear ImGui frame
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
 
-        // Create the explorer window on the left
+        if (!currentWorkingDirectory.empty()) {
+            g_Terminal.SetWorkingDirectory(currentWorkingDirectory);
+        }
+
+        // Calculate available space for other windows if terminal is open
+        float terminalSpace = terminalWindowOpen ? terminalHeight : 0.0f;
+
+        // Create the explorer window on the left with adjusted height
         ImGui::SetNextWindowPos(ImVec2(0, 0));
-        ImGui::SetNextWindowSize(ImVec2(250, (float)g_Height));
+        ImGui::SetNextWindowSize(ImVec2(250, (float)g_Height - terminalSpace));
         ShowHierarchyWindow();
 
-        // Create a text editor window
+        // Create a text editor window with adjusted height
         ImGui::SetNextWindowPos(ImVec2(250, 0));
-        ImGui::SetNextWindowSize(ImVec2((float)g_Width - 250, (float)g_Height));
+        ImGui::SetNextWindowSize(ImVec2((float)g_Width - 250, (float)g_Height - terminalSpace));
         ImGui::Begin("Text Editor", nullptr, ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
 
-        // Show the main menu
         ShowFileMenu(done);
 
-        // Add a menu item for Search & Replace under the Text menu
         if (ImGui::BeginMenuBar()) {
             if (ImGui::BeginMenu("Text")) {
                 if (ImGui::MenuItem("Search & Replace")) {
-                    searchReplaceOpen = true; // Open the dialog
+                    searchReplaceOpen = true;
                 }
+                ImGui::EndMenu();
+            }
+
+            if (ImGui::BeginMenu("View")) {
+                ImGui::MenuItem("Terminal", NULL, &terminalWindowOpen);
                 ImGui::EndMenu();
             }
 
             if (ImGui::BeginMenu("File")) {
                 if (ImGui::MenuItem("Open File Browser")) {
-                    fileBrowserOpen = true; // Open the file browser
+                    fileBrowserOpen = true;
                 }
                 ImGui::EndMenu();
             }
@@ -131,10 +128,8 @@ int main(int, char**) {
             ImGui::EndMenuBar();
         }
 
-        // Render tabs
         RenderTabs();
 
-        // Show the search and replace dialog and render highlighted text
         if (currentTabIndex >= 0 && currentTabIndex < tabs.size()) {
             ShowSearchReplaceDialog(&searchReplaceOpen, searchText, replaceText, tabs[currentTabIndex].content,
                 searchResults, caseSensitive, currentMatchIndex);
@@ -142,7 +137,6 @@ int main(int, char**) {
             ImGui::EndChild();
         }
 
-        // Status bar for current tab
         if (currentTabIndex >= 0 && currentTabIndex < tabs.size()) {
             size_t totalCharacters = std::count_if(tabs[currentTabIndex].content.begin(), tabs[currentTabIndex].content.end(), [](char c) { return !std::isspace(c); });
             size_t totalLines = std::count(tabs[currentTabIndex].content.begin(), tabs[currentTabIndex].content.end(), '\n') + 1;
@@ -156,18 +150,20 @@ int main(int, char**) {
 
         ImGui::End();
 
-        // Rendering
+        // Render the terminal window at the bottom if it's open
+        if (terminalWindowOpen) {
+            g_Terminal.RenderWindow(&terminalWindowOpen);
+        }
+
         ImGui::Render();
         glViewport(0, 0, g_Width, g_Height);
         glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-        // Present
         ::SwapBuffers(g_MainWindow.hDC);
     }
 
-    // Cleanup
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
@@ -177,7 +173,6 @@ int main(int, char**) {
     return 0;
 }
 
-// Helper functions
 bool CreateDeviceWGL(HWND hWnd, WGL_WindowData* data) {
     HDC hDc = ::GetDC(hWnd);
     PIXELFORMATDESCRIPTOR pfd = { 0 };
@@ -205,10 +200,8 @@ void CleanupDeviceWGL(HWND hWnd, WGL_WindowData* data) {
     ::ReleaseDC(hWnd, data->hDC);
 }
 
-// Forward declare message handler from imgui_impl_win32.cpp
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
-// Win32 message handler
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
         return true;
